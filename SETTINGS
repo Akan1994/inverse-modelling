@@ -9,55 +9,57 @@
 
 # Path and file settings
 # use scratch drive, if yes writes relative paths for options and output (1 = yes, 0 = no)
-lscratch :    1
+lscratch :    0
 # flexpart source path 
-path_flexpart: /mypath/flexpart/
+path_flexpart: /home/akankshaa/flexpart/Vienna/flexpart/flexpart-master/
 # flexpart version (either 10 or 11)
 FPversion:    10
 # path where to write options folder (root only, recname and month are appended)
-path_options: /mypath/flexpart_options/
+path_options: /home/akankshaa/flexinvert/aakash/flexinvertplus/OUTPUT/FP_files/test_for_obs/
 # path where to write flexpart output (root only, recname and month are appended)
-path_output: /mypath/flexpart_output/
+path_output: /home/akankshaa/flexinvert/aakash/flexinvertplus/OUTPUT/FP_output/test_for_obs/
 # path to observations 
-path_obs: /mypath/obs/
+path_obs: /home/akankshaa/flexinvert/aakash/flexinvertplus/INPUT/OBS/obs_6h/
 # path to OH fields (FPv10 only)
-path_ohfield: /mypath/oh_fields/
+path_ohfield: /home/akankshaa/flexpart/Vienna/flexpart/flexpart-master/
 # path where to write observation output
-path_obsout: /mypath/obs_out/
+path_obsout: /home/akankshaa/flexinvert/aakash/flexinvertplus/INPUT/OBS/OBS_out/
 # observation file format (one of obspack, wdcgg, noaa, basic, icos)
-obsformat: obspack
+obsformat: basic
 # observation file suffix
 suffix: .txt
 # receptor list file
-file_recept: /mypath/input/reclist.txt
+file_recept: /home/akankshaa/flexinvert/aakash/flexinvertplus/INPUT/OBS/reclist_pm25.txt
 # AVAILABLE files
-file_avail: /mypath/available_files/AVAILABLE
-file_availnest: /mypath/available_files/AVAILABLE
+file_avail: /home/akankshaa/flexpart/punjab_pkp/delhi_sites/AVAILABLE_ERA5_org
+#file_availnest: /mypath/available_files/AVAILABLE
 # windfields to use (determines lon of domain for flexpart run) (oper, era5)
-windfield:  era5
+windfield:  /home/akankshaa/flexpart/ecmwf/2022
+
+#path_meteodata: /home/akankshaa/flexpart/ecmwf/2022
 
 # If species has chemical reactions (for FPv11 only)
 # number of reactions
-nreagent: 1
+nreagent: 0
 # comma-separated list of paths to reagents files (length of nreagent)
-path_reagents: /mypath/oh_fields/
+path_reagents: 
 # comma-separated list of units in reagents files ("molecule/cm3" or "mol/mol") (length of nreagent)
-reagent_units: molecule/cm3
+reagent_units: 
 # comma-sepated list indicating if reagent fields are to be interpolated to hourly based on SZA (0 = no, 1 = yes)
-reagent_interp: 1
+reagent_interp: 
 
 # General settings
 # make flexpart releases only when there are observations (1) or at regular intervals (0)
 # important: if set lrelease = 0 observations have to be from fixed locations (not aircraft, ship, satellite)
 lrelease: 0
 # if regular flexpart releases (lrelease = 0) set frequency (hours)
-relfreq: 1
+relfreq: 6
 # select afternoon observations (night for mountains) (select = 1, no selection = 0)
-lselect: 1
+lselect: 0
 # average observations (average = 1, no average = 0)
-laverage: 0
+laverage: 1
 # averaging interval if laverage = 1 (hours)
-intaverage: 0
+intaverage: 6
 # flexpart file format (namelist = 1, ascii = 0)
 lnamelist: 1
 # if observation output already exists - append (1) or make new files (0)
@@ -65,61 +67,60 @@ lappendfile: 0
 
 # COMMAND settings
 # start date of simulation (yyyymmdd)
-datei:   20120101
+datei:   20221015
 # end date of simulation (yyyymmdd)
-datef:   20120201
+datef:   20221115
 # output rate (secs)
-outrate: 10800
+outrate: 21600
 # time average of output (secs)
-outaverage: 10800
+outaverage: 21600
 # sampling rate of output (secs)
 outsample: 1800
 # (mass unit = 1, mixing ratio unit = 2)
 ind_source: 1
 #  (mass unit = 1, mixing ratio unit = 2)
-ind_receptor: 2
+ind_receptor: 1
 # use nested output (0 = no, 1 = yes)
 lnested: 0
 # output sensitivity to initial conditions (for backward runs, 0 = none, 1 = mass unit, 2 = mass mixing ratio)
-linit_cond: 2
+linit_cond: 0
 
 # OUTGRID settings
 # longitude of lower left corner of output grid
-outlonleft: -179.00
+outlonleft: 70.00
 # latitude of lower left corner of output grid
-outlatlower: -90.00
+outlatlower: 25.00
 # number of longitudinal grid cells in output grid
-numxgrid: 360
+numxgrid: 48
 # number of latitudinal grid cells in output grid
-numygrid: 180
+numygrid: 40
 # longitudinal resolution in output grid
-dxout: 1.0
+dxout: 0.25
 # latitudinal resolution in outout grid
-dyout: 1.0
+dyout: 0.25
 # longitude of lower left corner of nested grid (used if nested_output = 1)
-outlonnest: -15.0
+outlonnest: 
 # latitude of lower left corner of nested grid (used if nested_output = 1)
-outlatnest: 30.0
+outlatnest: 
 # number of longitudinal grid cells in nested grid (used if nested_output = 1)
-numxnest: 100.0
+numxnest: 
 # number of latitudinal grid cells in nested grid (used if nested_output = 1)
-numynest: 90.0
+numynest: 
 # longitudinal resolution in nested grid (used if nested_output = 1)
-dxoutnest: 0.5
+dxoutnest: 
 # latitudinal resolution in nested grid (used if nested_output = 1)
-dyoutnest: 0.5
+dyoutnest: 
 # comma-separated list of vertical levels in output grid (meters)
-zlevel: 100,500,1000,2000,3000,5000,7000,9000,12000,15000,20000,50000
-
+zlevel: 100,500
 # RELEASES settings
 # species (see: /options/SPECIES/spec_overview)
-species: CO2
+species: AERO-TRACE
 # start date of releases (yyyymmdd)
-reldatei: 20120101
+reldatei: 20221015
 #end date of releases (yyyymmdd)
-reldatef: 20120201
+reldatef: 20221115
 # number of particles per grid cell
-npart: 10000
+npart: 9500
 # release heights relative to (1 = ground, 2 = sea level)
 zref: 2
 # orography inputfile (if zref = 1)
@@ -127,5 +128,5 @@ file_orog: none
 
 # AGECLASS settings
 # ageclass (sec)
-ageclass: 259200
+ageclass: 604800
 
