@@ -95,7 +95,7 @@ subroutine process_obs(settings, nobs, freq, jdobs, latobs, lonobs, altobs, conc
   altobs(1:nobs) = altobs_out
   errobs(1:nobs) = errobs_out
 !  print*, 'process_obs: ind = ',ind
- print*,'debug'
+
   ! if average and/or select obs
   if( settings%laverage.eq.1.or.settings%lselect.eq.1 ) then
     n = 1
@@ -106,9 +106,8 @@ subroutine process_obs(settings, nobs, freq, jdobs, latobs, lonobs, altobs, conc
     eomday = calceomday(jjjjmmdd/100)
     jdsom = juldate((jjjjmmdd/100)*100+1, 0)
     jdeom = jdsom + real(eomday,kind=8)
-    print*, 'jdsom: ',jdsom
-    print*, 'jdeom: ',jdeom
-    print*,'jdate: ',jdate
+!    print*, 'jdsom: ',jdsom
+!    print*, 'jdeom: ',jdeom
     ! loop over all observations in current month
     do while( jdate.le.jdobs(nobs) )
       jdt = dnint(jdate*1.e6)/1.e6

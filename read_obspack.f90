@@ -1,5 +1,5 @@
 !---------------------------------------------------------------------------------------
-! PREP_FLEXPART: read_basic
+! PREP_FLEXPART: read_obspack
 !---------------------------------------------------------------------------------------
 !  FLEXINVERT is free software: you can redistribute it and/or modify
 !  it under the terms of the GNU General Public License as published by
@@ -16,12 +16,12 @@
 !
 !  Copyright 2017, Rona Thompson
 !---------------------------------------------------------------------------------------
-!> read_basic
+!
+!> read_obspack
 !!
-!! Purpose:    Reads observations from a simple file format and averages and/or 
-!!             filters them. Writes the averaged/filtered observations to file in the
-!!             format required by FLEXINVERT. Input format is:
-!!             YYYY MM DD HH MI SS CONC ERR LON LAT ALT
+!! Purpose:    Reads observations from ObsPack files and averages and/or filters them.
+!!             Writes the averaged/filtered observations to file in the format 
+!!             required by FLEXINVERT.
 !!
 !! Interface:
 !!
@@ -41,7 +41,7 @@
 !!
 !---------------------------------------------------------------------------------------
 
-subroutine read_basic(settings, jd, nr, nobs, obs)
+subroutine read_obspack(settings, jd, nr, nobs, obs)
 
   use mod_settings
   use mod_var
@@ -62,36 +62,29 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
   character(len=max_path_len)                           :: file_obs
   character(len=max_path_len)                           :: rowfmt
   character(len=200)                                    :: line
-  character(len=200), dimension(50)                     :: args
+  character(len=200), dimension(20)                     :: args
   character(len=6)                                      :: adate
-  character(len=3)                                      :: flag
-  real, dimension(12)                                   :: temp
+  character(len=4)                                      :: version
+  real, dimension(16)                                   :: temp
   logical                                               :: lexist
   integer                                               :: ierr
   integer                                               :: cnt 
   integer                                               :: narg
-  integer                                               :: skip
-  integer                                               :: c, i, j, n
+  integer                                               :: c, i, l, m, n
   integer                                               :: jjjjmmdd, hhmiss, yyyy, mm, dd, hh, mi, ss
   integer                                               :: eomday, hloc
-  real                                                  :: dt, tmp, freq
-  real                                                  :: conc, err
+  real                                                  :: conc, err, freq
   real(kind=8)                                          :: jdate, out_repr_time
   real(kind=8), dimension(maxobs)                       :: jdobs  
   real, dimension(maxobs)                               :: latobs, lonobs, altobs, concobs, errobs
 
-  ! freq determines length of the release period in the flexpart file RELEASES
-  ! only used if not averaging
-  freq = 0.25
   call caldate(jd, jjjjmmdd, hhmiss)
   eomday = calceomday(jjjjmmdd/100)
-
-  print*, filelist
 
   ! find file matching receptor name
   do n = 1, nfiles
     do i = 1, len_trim(filelist(n))-2
-      if ( to_lower(filelist(n)(i:(i+2))).eq.to_lower(trim(recname(nr))) ) go to 10
+      if ( filelist(n)(i:(i+2)).eq.to_lower(trim(recname(nr))) ) go to 10
     end do
   end do
 10 continue 
@@ -110,11 +103,23 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
   print*, 'Reading file: '//trim(settings%path_obs)//trim(file_obs)
 
   ! read header
-  skip = 1  ! default 1 line skip for the header line.
-  print*, 'number to skip: ',skip
-  do i = 1, skip 
-    read (100, fmt='(A)') line
-  end do  
+  l = len_trim('# Product:')
+  m = len_trim('# dataset_data_frequency :')
+  n = len_trim('# year')
+  do while (ierr.eq.0)
+    read (100, fmt='(A)', iostat=ierr) line
+    if ( line(:l) == '# Product:' ) then
+      call parse_string(line, ":", args(:), narg)
+      version = args(2)(30:33)
+    endif
+    if ( line(:m) == '# dataset_data_frequency :' ) then
+      call parse_string(line, ":", args(:), narg)
+      read(args(2),*) freq
+    endif
+    if ( line(:n) == '# year' ) ierr = 1
+  end do
+  print*, 'Raw data frequency: ',freq
+  print*, 'ObsPack version: ',version
 
   ! read data
   cnt = 0
@@ -122,27 +127,25 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
     read(100,fmt='(A)',iostat=ierr) line
     if(ierr.gt.0) exit read_loop
     call parse_string(line, " ", args(:), narg)
-    i = 0
-    do n = 1, 6 ! yyyy mm dd hh mi ss
-      i = i + 1
-      read(args(n),*) temp(i)
+    do n = 1, 16
+      read(args(n),*) temp(n)
     end do
-    do n = 7, 8 ! conc, err
-      i = i + 1
-      read(args(n),*) temp(i)
-    end do
-    do n = 9, 11 ! lon, lat, alt
-      i = i + 1
-      read(args(n),*) temp(i)
-    end do 
     yyyy = int(temp(1))
     mm = int(temp(2))
     dd = int(temp(3))
     hh = int(temp(4))
     mi = int(temp(5))
     ss = int(temp(6))
-    conc = temp(7)
-    err = temp(8)
+    if ( version.eq.'v2.1') then
+      conc = temp(7)
+      err = temp(8)
+    else if ( version.eq.'v3.2') then
+      conc = temp(9)
+      err = temp(10)
+    else
+      print*, 'ERROR: unknown ObsPack version'
+      stop
+    endif
     ! calculate julian date 
     jjjjmmdd = yyyy*10000+mm*100+dd
     hhmiss = hh*10000+mi*100+ss
@@ -151,19 +154,43 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
     if ( (jdate.lt.jd).or.(jdate.ge.min(jreldatef,(jd+real(eomday,kind=8)))) ) cycle read_loop
     cnt = cnt + 1
     jdobs(cnt) = jdate
-    concobs(cnt) = conc
-    errobs(cnt) = err
-    latobs(cnt) = temp(9)
-    lonobs(cnt) = temp(10)
-    altobs(cnt) = temp(11)
+    if ( version.eq.'v2.1' ) then
+      latobs(cnt) = temp(10)
+      lonobs(cnt) = temp(11)
+      if ( settings%zref.eq.1 ) then
+        ! height metres above ground    
+        altobs(cnt) = temp(14)
+      else if ( settings%zref.eq.2) then
+        ! height metres above sea level
+        altobs(cnt) = temp(12)
+      endif
+    else if ( version.eq.'v3.2' ) then
+      latobs(cnt) = temp(12)
+      lonobs(cnt) = temp(13)
+      if ( settings%zref.eq.1 ) then
+        ! height metres above ground    
+        altobs(cnt) = temp(16)
+      else if ( settings%zref.eq.2) then
+        ! height metres above sea level
+        altobs(cnt) = temp(14)
+      endif
+    else
+      print*, 'ERROR: unknown ObsPack version'
+      stop
+    endif
+    ! convert from mole fraction to ppmv
+    concobs(cnt) = conc*1e6
+    errobs(cnt) = err*1e6
     if ( errobs(cnt).le.-9.99 ) errobs(cnt) = 0.
   end do read_loop
   nobs = cnt
 
+  print*, 'lat, lon, alt = ',latobs(1),lonobs(1),altobs(1)
+
   ! close input file
   close(100)
 
-  print*, 'nobs: ',nobs
+  print*, 'Number of raw observations: ',nobs
 
   ! no observations go to end
   if ( nobs.eq.0 ) then
@@ -247,7 +274,6 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
 20 continue
 
 
-end subroutine read_basic
-
+end subroutine read_obspack
 
 

@@ -1,5 +1,5 @@
 !---------------------------------------------------------------------------------------
-! PREP_FLEXPART: read_basic
+! PREP_FLEXPART: read_wdcgg
 !---------------------------------------------------------------------------------------
 !  FLEXINVERT is free software: you can redistribute it and/or modify
 !  it under the terms of the GNU General Public License as published by
@@ -16,12 +16,12 @@
 !
 !  Copyright 2017, Rona Thompson
 !---------------------------------------------------------------------------------------
-!> read_basic
+!
+!> read_wdcgg
 !!
-!! Purpose:    Reads observations from a simple file format and averages and/or 
-!!             filters them. Writes the averaged/filtered observations to file in the
-!!             format required by FLEXINVERT. Input format is:
-!!             YYYY MM DD HH MI SS CONC ERR LON LAT ALT
+!! Purpose:    Reads observations from WDCGG files and averages and/or filters them.
+!!             Writes the averaged/filtered observations to file in the format 
+!!             required by FLEXINVERT. Note this script reads the 2019 WDCGG file format.
 !!
 !! Interface:
 !!
@@ -41,7 +41,7 @@
 !!
 !---------------------------------------------------------------------------------------
 
-subroutine read_basic(settings, jd, nr, nobs, obs)
+subroutine read_wdcgg(settings, jd, nr, nobs, obs)
 
   use mod_settings
   use mod_var
@@ -62,39 +62,35 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
   character(len=max_path_len)                           :: file_obs
   character(len=max_path_len)                           :: rowfmt
   character(len=200)                                    :: line
-  character(len=200), dimension(50)                     :: args
+  character(len=200), dimension(30)                     :: args
   character(len=6)                                      :: adate
-  character(len=3)                                      :: flag
-  real, dimension(12)                                   :: temp
+  character(len=6)                                      :: utcstr
+  real, dimension(22)                                   :: temp
   logical                                               :: lexist
   integer                                               :: ierr
   integer                                               :: cnt 
-  integer                                               :: narg
-  integer                                               :: skip
-  integer                                               :: c, i, j, n
+  integer                                               :: narg, nflag
+  integer                                               :: cs, rem
+  integer                                               :: i, n, p, q
   integer                                               :: jjjjmmdd, hhmiss, yyyy, mm, dd, hh, mi, ss
-  integer                                               :: eomday, hloc
-  real                                                  :: dt, tmp, freq
-  real                                                  :: conc, err
-  real(kind=8)                                          :: jdate, out_repr_time
+  integer                                               :: eomday, hloc, num
+  real                                                  :: conc, err, lon, lat, alt, hgt, flag, freq
+  real(kind=8)                                          :: jdate, jdateutc, out_repr_time
   real(kind=8), dimension(maxobs)                       :: jdobs  
   real, dimension(maxobs)                               :: latobs, lonobs, altobs, concobs, errobs
 
-  ! freq determines length of the release period in the flexpart file RELEASES
-  ! only used if not averaging
-  freq = 0.25
   call caldate(jd, jjjjmmdd, hhmiss)
   eomday = calceomday(jjjjmmdd/100)
 
-  print*, filelist
+  freq = 1.
 
   ! find file matching receptor name
   do n = 1, nfiles
     do i = 1, len_trim(filelist(n))-2
-      if ( to_lower(filelist(n)(i:(i+2))).eq.to_lower(trim(recname(nr))) ) go to 10
+      if ( filelist(n)(i:(i+2)).eq.to_lower(trim(recname(nr))) ) go to 10
     end do
   end do
-10 continue 
+10 continue
   if ( n.gt.nfiles ) then
     print*, 'WARNING: file not found for receptor '//trim(recname(nr))
     go to 20
@@ -110,53 +106,65 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
   print*, 'Reading file: '//trim(settings%path_obs)//trim(file_obs)
 
   ! read header
-  skip = 1  ! default 1 line skip for the header line.
-  print*, 'number to skip: ',skip
-  do i = 1, skip 
-    read (100, fmt='(A)') line
-  end do  
+  p = len_trim('# site_lst2utc')
+  q = len_trim('# site_gaw_id year')
+  do while (ierr.eq.0)
+    read (100, fmt='(A)', iostat=ierr) line
+    if ( line(1:q) == '# site_gaw_id year' ) ierr = 1
+    if ( line(1:p) == '# site_lst2utc' ) then
+      call parse_string(line, ":", args(:), narg)
+      read(args(2),*) utcstr
+    endif
+  end do
 
   ! read data
   cnt = 0
-  read_loop: do 
+  read_loop: do
     read(100,fmt='(A)',iostat=ierr) line
     if(ierr.gt.0) exit read_loop
     call parse_string(line, " ", args(:), narg)
-    i = 0
-    do n = 1, 6 ! yyyy mm dd hh mi ss
-      i = i + 1
-      read(args(n),*) temp(i)
+    do n = 2, 21
+      read(args(n),*) temp(n)
     end do
-    do n = 7, 8 ! conc, err
-      i = i + 1
-      read(args(n),*) temp(i)
-    end do
-    do n = 9, 11 ! lon, lat, alt
-      i = i + 1
-      read(args(n),*) temp(i)
-    end do 
-    yyyy = int(temp(1))
-    mm = int(temp(2))
-    dd = int(temp(3))
-    hh = int(temp(4))
-    mi = int(temp(5))
-    ss = int(temp(6))
-    conc = temp(7)
-    err = temp(8)
+    yyyy = int(temp(2))
+    mm = int(temp(3))
+    dd = int(temp(4))
+    hh = int(temp(5))
+    mi = int(temp(6))
+    conc = temp(14)
+    err = temp(15)
+    lat = temp(17)
+    lon = temp(18)
+    alt = temp(19)
+    hgt = temp(21)
+    read(args(24),*) flag
     ! calculate julian date 
     jjjjmmdd = yyyy*10000+mm*100+dd
-    hhmiss = hh*10000+mi*100+ss
+    hhmiss = hh*10000+mi*100
     jdate = juldate(jjjjmmdd, hhmiss)
+    ! adjust to UTC
+    if ( trim(utcstr).ne.'UTC' ) then
+      jdateutc = jdate - dint(real(lon,kind=8)*24d0/360d0)/24d0
+    else
+      jdateutc = jdate
+    endif
+    if ( flag.eq.3. ) cycle read_loop
     if ( conc.le.-999. ) cycle read_loop
-    if ( (jdate.lt.jd).or.(jdate.ge.min(jreldatef,(jd+real(eomday,kind=8)))) ) cycle read_loop
+    if ( (jdateutc.lt.jd).or.(jdateutc.ge.min(jreldatef,(jd+real(eomday,kind=8)))) ) cycle read_loop
     cnt = cnt + 1
-    jdobs(cnt) = jdate
+    jdobs(cnt) = jdateutc
     concobs(cnt) = conc
     errobs(cnt) = err
-    latobs(cnt) = temp(9)
-    lonobs(cnt) = temp(10)
-    altobs(cnt) = temp(11)
-    if ( errobs(cnt).le.-9.99 ) errobs(cnt) = 0.
+    if ( errobs(cnt).le.-999. ) errobs(cnt) = 0.
+    latobs(cnt) = lat
+    lonobs(cnt) = lon
+    if ( settings%zref.eq.1 ) then
+      ! metres above ground
+      altobs(cnt) = hgt
+    else if ( settings%zref.eq.2 ) then
+      ! metres above sea level
+      altobs(cnt) = alt
+    endif
   end do read_loop
   nobs = cnt
 
@@ -174,6 +182,8 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
 
   ! allocate obs
   call alloc_obs(nobs, obs)
+
+  print*, 'jdobs(nobs):',jdobs(nobs)
 
   ! average and/or select observations
   call process_obs(settings, nobs, freq, jdobs, latobs, lonobs, altobs, concobs, errobs, obs)
@@ -246,8 +256,6 @@ subroutine read_basic(settings, jd, nr, nobs, obs)
 
 20 continue
 
-
-end subroutine read_basic
-
+end subroutine read_wdcgg
 
 
